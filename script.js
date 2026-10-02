@@ -35,7 +35,7 @@ function validate(step) {
   const rules = {
     1: [Boolean(getSingle('purchaseType')), 'Escolha como você pretende comprar para continuar.'],
     2: [getMulti('materials').length > 0, 'Selecione pelo menos um material de interesse.'],
-    3: [Boolean(getSingle('quantity')), 'Selecione uma faixa aproximada de quantidade.'],
+    3: [Boolean(getSingle('fabricFormat')) && Boolean(getSingle('quantity')), 'Escolha o formato e uma quantidade aproximada.'],
     4: [Boolean(getSingle('name')) && Boolean(getSingle('city')), 'Preencha seu nome e sua cidade / UF.']
   };
 
@@ -52,8 +52,7 @@ function truncate(text, max = 44) {
 function updateLiveSummary() {
   const values = [
     getSingle('purchaseType'),
-    getMulti('materials').join(', '),
-    getSingle('quantity')
+    getMulti('materials').join(', ')
   ];
 
   [...liveSummary.querySelectorAll('strong')].forEach((el, index) => {
@@ -136,7 +135,7 @@ form.addEventListener('submit', (event) => {
     'Fala Daniel ! 👋',
     '',
     `Me chamo ${getSingle('name')} e sou aqui de ${getSingle('city')}.`,
-    `Gostaria de comprar ${getMulti('materials').join(', ')}, ${purchase} (quantidade aproximada: ${getSingle('quantity')}).`,
+    `Gostaria de comprar ${getMulti('materials').join(', ')}, ${purchase} (formato: ${getSingle('fabricFormat')}; quantidade aproximada: ${getSingle('quantity')}).`,
     '',
     'Pode me mostrar o que vocês têm disponível e os valores?',
     ...(getSingle('company') ? ['', `Empresa / ateliê: ${getSingle('company')}`] : []),
@@ -194,3 +193,48 @@ menuPanel.addEventListener('keydown', event => {
   if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
   else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
 });
+
+
+const quantitySets = {
+ 'Retalhos': [['Até 5 kg','compra menor'],['Mais de 5 até 20 kg','volume intermediário'],['Mais de 20 até 50 kg','compra em volume'],['Acima de 50 kg','maior volume'],['Ainda não sei','definimos no WhatsApp']],
+ 'Na peça': [['1 peça / rolo','uma peça inteira'],['2–5 peças / rolos','algumas peças'],['Mais de 5 peças / rolos','maior volume'],['Ainda não sei','definimos no WhatsApp']]
+};
+const quantityCell = document.getElementById('quantityCell');
+const quantityBubble = document.getElementById('quantityBubble');
+const formatButtons = document.getElementById('formatButtons');
+let chosenFormatButton;
+document.querySelectorAll('[data-format]').forEach(button => button.addEventListener('click', () => {
+ chosenFormatButton = button;
+ form.elements.fabricFormat.value = button.dataset.format;
+ const options = document.getElementById('quantityOptions'); options.replaceChildren();
+ quantitySets[button.dataset.format].forEach(([title, description]) => {
+  const label = document.createElement('label');
+  const input = document.createElement('input'); input.type = 'radio'; input.name = 'quantity'; input.value = title;
+  const span = document.createElement('span'); const strong = document.createElement('strong'); strong.textContent = title;
+  const small = document.createElement('small'); small.textContent = description;
+  span.append(strong, small); label.append(input, span); options.append(label);
+ });
+ document.getElementById('bubbleTitle').textContent = button.dataset.format + ' · quantidade';
+ quantityBubble.hidden = false;
+ const origin = button.getBoundingClientRect(), target = quantityBubble.getBoundingClientRect();
+ quantityCell.style.minHeight = `${target.height + 8}px`;
+ quantityBubble.style.setProperty('--cell-x', `${origin.left + origin.width / 2 - target.left}px`);
+ quantityBubble.style.setProperty('--cell-y', `${origin.top + origin.height / 2 - target.top}px`);
+ quantityBubble.classList.add('is-emerging');
+ quantityCell.classList.add('is-expanded'); formatButtons.inert = true;
+ errorEl.textContent = ''; document.getElementById('quantityOptions').querySelector('input')?.focus({preventScroll:true});
+}));
+function changeFabricFormat() {
+ quantityCell.style.minHeight = '';
+ quantityBubble.hidden = true; quantityBubble.classList.remove('is-emerging'); quantityCell.classList.remove('is-expanded'); formatButtons.inert = false;
+ document.getElementById('quantityOptions').replaceChildren(); form.elements.fabricFormat.value = '';
+ errorEl.textContent = ''; chosenFormatButton?.focus({preventScroll:true});
+}
+document.getElementById('changeFormat').addEventListener('click', changeFabricFormat);
+document.getElementById('changeFormatText').addEventListener('click', changeFabricFormat);
+quantityBubble.addEventListener('keydown', event => { if (event.key === 'Escape') { event.preventDefault(); changeFabricFormat(); } });
+
+const bubbleResizeObserver = new ResizeObserver(() => {
+ if (!quantityBubble.hidden) quantityCell.style.minHeight = `${quantityBubble.offsetHeight + 8}px`;
+});
+bubbleResizeObserver.observe(quantityBubble);
